@@ -93,6 +93,11 @@ void RCC_Conf()
 			RCC_SYSCLKConfig(RCC_SYSCLKSource_HSE);
 			while(RCC_GetSYSCLKSource() != 0x04);
   }
+		RCC_APB1PeriphClockCmd(RCC_APB1Periph_TIM2, ENABLE);
+		RCC_APB1PeriphResetCmd(RCC_APB1Periph_TIM2, DISABLE);
+
+		RCC_AHBPeriphClockCmd(RCC_AHBPeriph_DMA1, ENABLE);
+		RCC_APB1PeriphClockCmd(RCC_APB1Periph_DAC, ENABLE);
 }
 
 void init_port()
@@ -102,6 +107,7 @@ void init_port()
 	GPIO_Conf.GPIO_Mode = GPIO_Mode_Out_PP;
 	GPIO_Conf.GPIO_Speed = GPIO_Speed_10MHz;
 	GPIO_Init(GPIOA, &GPIO_Conf);
+
 	RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOB, ENABLE);
   	GPIO_Conf.GPIO_Pin = GPIO_Pin_7 | GPIO_Pin_8;
   	GPIO_Conf.GPIO_Mode = GPIO_Mode_Out_PP;
@@ -117,6 +123,7 @@ void init_port()
 	// SPI2_MISO
  	GPIO_Conf.GPIO_Pin = GPIO_Pin_14;
  	GPIO_Conf.GPIO_Mode = GPIO_Mode_IN_FLOATING;
+ 	GPIO_Conf.GPIO_Speed = GPIO_Speed_10MHz;
  	GPIO_Init(GPIOB, &GPIO_Conf);
 
  	RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOC, ENABLE);
@@ -137,6 +144,8 @@ void init_port()
 	GPIO_Conf.GPIO_Mode = GPIO_Mode_IN_FLOATING;
 	GPIO_Init(GPIOA, &GPIO_Conf);
 
+
+
   init_usart_gps(9600, 0);
 
 	GPIO_Conf.GPIO_Pin = GPIO_Pin_10;
@@ -150,6 +159,7 @@ void init_port()
   init_usart_debug();
 
 	RCC_AHBPeriphClockCmd ( RCC_AHBPeriph_DMA1 , ENABLE ) ;
+
 	DMA_DeInit(DMA1_Channel1);
 	DMA_InitStructure.DMA_BufferSize = 2;
 	DMA_InitStructure.DMA_DIR = DMA_DIR_PeripheralSRC;
@@ -203,7 +213,7 @@ void spi_init() {
   SPI_InitStructure.SPI_DataSize = SPI_DataSize_16b;
   SPI_InitStructure.SPI_CPOL = SPI_CPOL_Low;
   SPI_InitStructure.SPI_CPHA = SPI_CPHA_1Edge;
-  SPI_InitStructure.SPI_BaudRatePrescaler = SPI_BaudRatePrescaler_16;
+  SPI_InitStructure.SPI_BaudRatePrescaler = SPI_BaudRatePrescaler_8;
   SPI_InitStructure.SPI_FirstBit = SPI_FirstBit_MSB;
   SPI_InitStructure.SPI_CRCPolynomial = 7;
   SPI_Init(SPI2, &SPI_InitStructure);
@@ -212,6 +222,7 @@ void spi_init() {
   SPI_InitStructure.SPI_Mode = SPI_Mode_Master;
   SPI_Init(SPI2, &SPI_InitStructure);
 }
+
 
 void spi_deinit() {
   SPI_I2S_DeInit(SPI2);
@@ -222,6 +233,85 @@ void spi_deinit() {
 
 }
 
+void (*timer_callback)();
+
+void TIM2_IRQHandler(void) {
+    TIM_ClearITPendingBit(TIM2, TIM_IT_Update);
+    timer_callback();
+}
+
+
+void init_timer_callback(uint32_t period, void (*callback)()){
+	//period is in 1/6mln sec
+
+	  TIM_Cmd(TIM2,DISABLE);
+
+	 if (period>0) period--;
+	 NVIC_DisableIRQ(TIM2_IRQn);
+	 timer_callback = callback;
+
+
+	  TIM_TimeBaseInitTypeDef TIM2_TimeBaseInitStruct;
+
+	  if ((uint32_t)period >= 30000uL){
+		  TIM2_TimeBaseInitStruct.TIM_Prescaler = 6 - 1;				// tick every 1/1000000 s
+		  period/=6;
+	  }else {
+		  TIM2_TimeBaseInitStruct.TIM_Prescaler = 0;				// tick every 1/6000000 s
+	  }
+	  TIM2_TimeBaseInitStruct.TIM_CounterMode = TIM_CounterMode_Up;
+	  TIM2_TimeBaseInitStruct.TIM_Period = (uint16_t) period;
+	  TIM2_TimeBaseInitStruct.TIM_ClockDivision = TIM_CKD_DIV1;
+	  TIM2_TimeBaseInitStruct.TIM_RepetitionCounter = 0;
+	  TIM_TimeBaseInit(TIM2,&TIM2_TimeBaseInitStruct);
+
+	  TIM_ClearITPendingBit(TIM2, TIM_IT_Update);
+	  TIM_ITConfig(TIM2,TIM_IT_Update, ENABLE);
+	  NVIC_InitTypeDef NVIC_InitStructure; 							//create NVIC structure
+	  NVIC_InitStructure.NVIC_IRQChannel = TIM2_IRQn;
+	  NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority = 0;
+	  NVIC_InitStructure.NVIC_IRQChannelSubPriority = 1;
+	  NVIC_InitStructure.NVIC_IRQChannelCmd = ENABLE;
+	  NVIC_Init(&NVIC_InitStructure);
+
+	  NVIC_EnableIRQ(TIM2_IRQn);
+	  /* TIM2 TRGO selection */
+	  TIM_SelectOutputTrigger(TIM2, TIM_TRGOSource_Update);
+
+	  TIM_Cmd(TIM2,ENABLE);
+}
+
+
+
+void stop_timer(){
+	TIM_Cmd(TIM2,DISABLE);
+}
+
+
+void conserve_power(){
+
+//	RCC_AHBPeriphClockCmd ( RCC_AHBPeriph_DMA1 , ENABLE ) ;
+	 PWR->CR |= PWR_CR_CWUF;
+
+	  /* Select STANDBY mode */
+	  PWR->CR |= PWR_CR_PDDS;
+
+	/* Clear SLEEPDEEP bit of Cortex-M0 System Control Register */
+	  SCB->SCR &= (uint32_t)~((uint32_t)SCB_SCR_SLEEPDEEP_Msk);
+
+	    __WFI();
+
+/*
+//no effect on power
+	RCC_HCLKConfig(RCC_SYSCLK_Div16);
+	RCC_PCLK2Config(RCC_HCLK_Div8);
+	RCC_PCLK1Config(RCC_HCLK_Div8);
+	RCC_SYSCLKConfig(RCC_SYSCLKSource_HSE);
+	while(RCC_GetSYSCLKSource() != 0x04);
+*/
+}
+
+/*
 void init_timer(const int rtty_speed) {
   TIM_TimeBaseInitTypeDef TIM2_TimeBaseInitStruct;
   RCC_APB1PeriphClockCmd(RCC_APB1Periph_TIM2, ENABLE);
@@ -244,3 +334,4 @@ void init_timer(const int rtty_speed) {
   NVIC_Init(&NVIC_InitStructure);
   TIM_Cmd(TIM2,ENABLE);
 }
+*/

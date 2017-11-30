@@ -3,10 +3,38 @@
 //
 
 #include <stm32f10x_usart.h>
+#include <stm32f10x_gpio.h>
 #include <string.h>
 #include "ublox.h"
 #include "delay.h"
 #include "init.h"
+
+volatile uint8_t gps_status=0;
+
+char dbuf[20];
+
+void USART1_IRQHandler(void) {
+	unsigned char c;
+	if (USART_GetITStatus(USART1, USART_IT_RXNE) == RESET) return;
+  //if (USART_GetITStatus(USART1, USART_IT_RXNE) != RESET)
+	c=USART_ReceiveData(USART1);
+	ublox_handle_incoming_byte(c);
+    //sprintf(dbuf,"%02X ",c);
+    //debug(dbuf);
+
+  //USART_SendData(USART3, c);
+  //while (USART_GetFlagStatus(USART3, USART_FLAG_TC) == RESET);
+}
+/*
+void USART1_IRQHandler(void) {
+  if (USART_GetITStatus(USART1, USART_IT_RXNE) != RESET) {
+	  	  ublox_handle_incoming_byte((uint8_t) USART_ReceiveData(USART1));
+  }else if (USART_GetITStatus(USART1, USART_IT_ORE) != RESET) { USART_ReceiveData(USART1); } else {    USART_ReceiveData(USART1);  }
+}
+*/
+
+
+
 
 GPSEntry currentGPSData;
 volatile uint8_t active = 0;
@@ -70,10 +98,45 @@ void ublox_get_last_data(GPSEntry * gpsEntry){
   __enable_irq();
 }
 
+void ublox_enable_pm(){
+	uBloxPacket msgcfgpm = {.header = {0xb5, 0x62, .messageClass=0x06, .messageId=0x32, .payloadSize=sizeof(uBloxCFGPM)},
+	      .data.cfgpm = {.version=0, .flags=0, .updatePeriod=0, .searchPeriod=0, .gridOffset=0, .onTime=0, .minAcqTime=0 }};
+
+	//uBloxPacket msgcfgpm = {.header = {0xb5, 0x62, .messageClass=0x06, .messageId=0x32, .payloadSize=sizeof(uBloxCFGPM)},
+	//	      .data.cfgpm = {.version=0, .flags=0x18102, .updatePeriod=5000, .searchPeriod=60000, .gridOffset=0, .onTime=10, .minAcqTime=15 }};
+
+	  do {
+	    send_ublox_packet(&msgcfgpm);
+	  } while (!ublox_wait_for_ack());
+
+}
+
+void ublox_sleep(){
+	gps_status=0; //SLEEP
+	uBloxPacket msgcfgpm = {.header = {0xb5, 0x62, .messageClass=0x02, .messageId=0x41, .payloadSize=8},
+	      .data.rxmpmreq = {.duration=0, .flags=0x02 }};
+	send_ublox_packet(&msgcfgpm);
+}
+
+void ublox_wakeup(){
+	_sendSerialByte(0xB5);
+}
+
 void ublox_init(){
-  uBloxPacket msgcfgrst = {.header = {0xb5, 0x62, .messageClass=0x06, .messageId=0x04, .payloadSize=sizeof(uBloxCFGRSTPayload)},
-      .data.cfgrst = { .navBbrMask=0xffff, .resetMode=1, .reserved1 = 0}
-  };
+
+//RESET GPS
+
+//COLDSTART
+  //uBloxPacket msgcfgrst = {.header = {0xb5, 0x62, .messageClass=0x06, .messageId=0x04, .payloadSize=sizeof(uBloxCFGRSTPayload)},
+  //    .data.cfgrst = { .navBbrMask=0xffff, .resetMode=1, .reserved1 = 0}
+  //};
+
+	//HOTSTART
+	uBloxPacket msgcfgrst = {.header = {0xb5, 0x62, .messageClass=0x06, .messageId=0x04, .payloadSize=sizeof(uBloxCFGRSTPayload)},
+	      .data.cfgrst = { .navBbrMask=0x0000, .resetMode=1, .reserved1 = 0}
+	};
+
+
   init_usart_gps(38400, 1);
   _delay_ms(10);
   send_ublox_packet(&msgcfgrst);
@@ -98,6 +161,12 @@ void ublox_init(){
     send_ublox_packet(&msgcfgrxm);
   } while (!ublox_wait_for_ack());
 
+  //Message Poll requests
+  //06 01
+  //06 06
+  //06 21
+  //06 12
+  debug("\rCONFIGURE POLLING 06 01\n");
   uBloxPacket msgcfgmsg = {.header = {0xb5, 0x62, .messageClass=0x06, .messageId=0x01, .payloadSize=sizeof(uBloxCFGMSGPayload)},
     .data.cfgmsg = {.msgClass=0x01, .msgID=0x02, .rate=1}};
 
@@ -105,15 +174,29 @@ void ublox_init(){
     send_ublox_packet(&msgcfgmsg);
   } while (!ublox_wait_for_ack());
 
-  msgcfgmsg.data.cfgmsg.msgID = 0x6;
+
+  debug("\rCONFIGURE POLLING 06 06\n");
+  msgcfgmsg.data.cfgmsg.msgID = 0x06;
   do {
     send_ublox_packet(&msgcfgmsg);
   } while (!ublox_wait_for_ack());
 
+  debug("\rCONFIGURE POLLING 06 21\n");
   msgcfgmsg.data.cfgmsg.msgID = 0x21;
   do {
     send_ublox_packet(&msgcfgmsg);
   } while (!ublox_wait_for_ack());
+
+
+    msgcfgmsg.data.cfgmsg.msgID = 0x12; //NAV-VELNED
+    do {
+      send_ublox_packet(&msgcfgmsg);
+    } while (!ublox_wait_for_ack());
+
+  //config NAV5
+  //dynModel 7 = Airborne <2g
+  //fixmode 3d only
+
 
   uBloxPacket msgcfgnav5 = {.header = {0xb5, 0x62, .messageClass=0x06, .messageId=0x24, .payloadSize=sizeof(uBloxCFGNAV5Payload)},
     .data.cfgnav5={.mask=0b00000001111111111, .dynModel=7, .fixMode=2, .fixedAlt=0, .fixedAltVar=10000, .minElev=5, .drLimit=0, .pDop=25, .tDop=25,
@@ -160,9 +243,12 @@ void ublox_handle_packet(uBloxPacket *pkt) {
   uBloxChecksum *checksum = (uBloxChecksum *)(((uint8_t*)&pkt->data) + pkt->header.payloadSize);
   if (cksum.ck_a != checksum->ck_a || cksum.ck_b != checksum->ck_b) {
     currentGPSData.bad_packets += 1;
-  } else {
+    return;
+  }
 
-    if (pkt->header.messageClass == 0x01 && pkt->header.messageId == 0x07){
+
+/*
+  	 if (pkt->header.messageClass == 0x01 && pkt->header.messageId == 0x07){ //NAV-PVT -- UNSUPPORTED IN THIS GPS
       currentGPSData.ok_packets += 1;
       currentGPSData.fix = pkt->data.navpvt.fixType;
       currentGPSData.lat_raw = pkt->data.navpvt.lat;
@@ -174,24 +260,53 @@ void ublox_handle_packet(uBloxPacket *pkt) {
       currentGPSData.sats_raw = pkt->data.navpvt.numSV;
       currentGPSData.speed_raw = pkt->data.navpvt.gSpeed;
 
-    } else if (pkt->header.messageClass == 0x01 && pkt->header.messageId == 0x02){
+    } else
+*/
+    if (pkt->header.messageClass == 0x01 && pkt->header.messageId == 0x02){ //NAV-POSLLH
       currentGPSData.ok_packets += 1;
       currentGPSData.lat_raw = pkt->data.navposllh.lat;
       currentGPSData.lon_raw = pkt->data.navposllh.lon;
       currentGPSData.alt_raw = pkt->data.navposllh.hMSL;
-    } else if (pkt->header.messageClass == 0x01 && pkt->header.messageId == 0x06){
-      currentGPSData.fix = pkt->data.navsol.gpsFix;
+      return;
+    }
+    if (pkt->header.messageClass == 0x01 && pkt->header.messageId == 0x06){//NAV-SOL, TOW, ECEF, DOP etc.
       currentGPSData.sats_raw = pkt->data.navsol.numSV;
-    } else if (pkt->header.messageClass == 0x01 && pkt->header.messageId == 0x21){
+      currentGPSData.fix = pkt->data.navsol.gpsFix;
+      /*0x00 = No Fix
+    		  0x01 = Dead Reckoning only
+    		  0x02 = 2D-Fix
+    		  0x03 = 3D-Fix
+    		  0x04 = GPS + dead reckoning combined
+    		  0x05 = Time only fix
+    		  0x06..0xff: reserved
+     */
+      if (pkt->data.navsol.gpsFix==3) gps_status=3; //FIX
+      	  else gps_status=1; //ACQUARING
+      return;
+    }
+    if (pkt->header.messageClass == 0x01 && pkt->header.messageId == 0x21){//NAV-TIMEUTC
       currentGPSData.hours = pkt->data.navtimeutc.hour;
       currentGPSData.minutes = pkt->data.navtimeutc.min;
       currentGPSData.seconds = pkt->data.navtimeutc.sec;
-    } else if (pkt->header.messageClass == 0x05 && pkt->header.messageId == 0x01){
-      ack_received = 1;
-    } else if (pkt->header.messageClass == 0x05 && pkt->header.messageId == 0x00){
-      nack_received = 1;
+      return;
     }
-  }
+    if (pkt->header.messageClass == 0x01 && pkt->header.messageId == 0x12){//NAV-VELNED
+    	currentGPSData.speed_raw=pkt->data.navvelned.gSpeed; //cm/s
+    	currentGPSData.vspeed_raw=pkt->data.navvelned.velD; //cm/s
+    	currentGPSData.heading_raw=pkt->data.navvelned.heading; // /1e5 deg
+    	return;
+    }
+    if (pkt->header.messageClass == 0x05 && pkt->header.messageId == 0x01){//ACK
+      ack_received = 1;
+      debug("\rACK\n");
+      return;
+    }
+    if (pkt->header.messageClass == 0x05 && pkt->header.messageId == 0x00){//NACK
+      nack_received = 1;
+      debug("\rNACK\n");
+      return;
+    }
+
 
 }
 uint8_t ublox_wait_for_ack() {
@@ -201,6 +316,7 @@ uint8_t ublox_wait_for_ack() {
   while(!ack_received && !nack_received){
     _delay_ms(1);
     if (!timeout--){
+    	return 0;
       break;
     }
   }

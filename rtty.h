@@ -1,6 +1,8 @@
 #include <stdint.h>
 #include "config.h"
 
+void prepare_rtty_frame(char *);
+
 typedef enum {
   rttyZero = 0,
   rttyOne = 1,
