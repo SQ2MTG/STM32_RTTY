@@ -17,7 +17,6 @@
 #include "delay.h"
 #include "aprs.h"
 #include "dac.h"
-#include "contestia.h"
 
 
 
@@ -227,7 +226,8 @@ void main(void) {
 #endif
 
 
-
+#ifdef HAB_USE
+		//no switch off, rare led status
 		if (gps_status==3) {
 			debug("\rGPS FIX\n");
 			GREEN_LED_ON;
@@ -241,10 +241,31 @@ void main(void) {
 			RED_LED_OFF;
 			_delay_ms(5000);
 		}
-
 		_delay_ms(SEND_INTERVAL);
+#endif
+
+#ifndef HAB_USE
+		ctone=SEND_INTERVAL/1000;
+		for (i=0;i<ctone;i++){
+			if (gps_status==3) { GREEN_LED_ON; _delay_ms(50); GREEN_LED_OFF; }
+				else { RED_LED_ON; _delay_ms(50); RED_LED_OFF; }
+			_delay_ms(950);
+
+			snprintf(rtty_frame,sizeof(rtty_frame),"\r%d, %d\n",ADCVal[0],ADCVal[1]);
+			debug(rtty_frame);
 
 
+			if (BUTTON_PRESSED){
+				_delay_ms(100);
+				if (BUTTON_PRESSED){//check for single spike etc.
+					RED_LED_ON; GREEN_LED_ON; //ready for power off
+					while (BUTTON_PRESSED) ; //wait for button release
+					_delay_ms(200);
+					power_off();
+				}
+			}
+		}
+#endif
 		//tests - do not use
 		/*
 		ublox_sleep();

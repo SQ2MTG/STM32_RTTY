@@ -6,6 +6,10 @@
 #define GREEN_LED_ON GPIO_ResetBits(GPIOB, GPIO_Pin_7)
 #define GREEN_LED_OFF GPIO_SetBits(GPIOB, GPIO_Pin_7)
 
+#define SUPPLY_ADC ADCVal[0]
+#define BUTTON_ADC ADCVal[1]
+
+#define BUTTON_PRESSED BUTTON_ADC+100 > SUPPLY_ADC
 
 
 void debug(char* str);
@@ -28,6 +32,7 @@ void stop_timer();
 
 void conserve_power();
 
+void power_off();
 
 void init_usart_gps(const uint32_t speed, const uint8_t enable_irq);
 

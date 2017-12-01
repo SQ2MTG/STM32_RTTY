@@ -7,13 +7,19 @@
 
 #define CALLSIGN "NOCALL"
 
-#define SEND_INTERVAL 60000
+//uncomment to enable vertical velocity/altitude data and other "balloon" features
+//#define HAB_USE
+
+#define APRS_COMMENT " RS41 tracker"
+
+
+#define SEND_INTERVAL 30000
 
 
 //RTTY custom shift 544 Hz, baudrate 50, 7bit  parity none, one stop bit
 
 //uncomment to enable RTTY beacon
-//#define RTTY_BEACON 432.500
+//#define RTTY_BEACON 432.500d
 #define RTTY_BAUDRATE 50
 
 
@@ -29,9 +35,18 @@
 
 
 #define APRS_CALLSIGN CALLSIGN
-#define APRS_SSID 14
-//#define APRS_SYMBOL APRS_SYM_CAR
+
+#ifdef HAB_USE
+#define APRS_SSID 9
 #define APRS_SYMBOL APRS_SYM_BALLOON
+#endif
+
+#ifndef HAB_USE
+#define APRS_SSID 9
+#define APRS_SYMBOL APRS_SYM_CAR
+#endif
+
+
 #define APRS_PATH "WIDE1-1,WIDE2-2"
 
 
@@ -39,8 +54,6 @@
 #define APRS_DEST_CALLSIGN				"APZQVA"
 #define APRS_DEST_SSID					0
 
-//uncomment to enable vertical velocity/altitude data
-#define HAB_USE
 
 
 //uncomment to enable supply voltage readout in APRS frames
@@ -82,12 +95,8 @@
 // E --> Truckers or generally full time drivers
 // F --> generic additional station, digi, mobile, wx, etc.
 
-#define APRS_COMMENT " RS41 tracker"
 #define RTTY_TO_APRS_RATIO 5 //transmit APRS packet with each x RTTY packet
 
-//*************TX Frequencies********************
-#define RTTY_FREQUENCY  434.500f //Mhz middle frequency
-#define APRS_FREQUENCY  432.500f //Mhz middle frequency
 
 //************RTTY Shift*********************** si4032
 #define RTTY_DEVIATION 0x2	// RTTY shift = RTTY_DEVIATION x 270Hz

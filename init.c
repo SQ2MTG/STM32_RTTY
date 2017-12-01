@@ -287,6 +287,9 @@ void stop_timer(){
 	TIM_Cmd(TIM2,DISABLE);
 }
 
+void power_off(){
+	GPIO_SetBits(GPIOA, GPIO_Pin_12);
+}
 
 void conserve_power(){
 
