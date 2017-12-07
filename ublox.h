@@ -6,11 +6,15 @@
 #define RS41HUP_UBLOX_H
 #include <stdint.h>
 
+extern volatile uint8_t gps_status;
+
 typedef struct {
   int32_t lat_raw;
   int32_t lon_raw;
   int32_t alt_raw;
   int32_t speed_raw;
+  int32_t vspeed_raw;
+  int32_t heading_raw;
   uint8_t sats_raw;
   uint8_t seconds;
   uint8_t minutes;
@@ -113,6 +117,20 @@ typedef struct {
 } uBloxNAVTIMEUTCPayload;
 
 typedef struct {
+  uint32_t iTOW;		//GPS Millisecond Time of Week [- ms]
+  int32_t velN;
+  int32_t velE;
+  int32_t velD;
+  uint32_t speed; //3d
+  uint32_t gSpeed;
+  int32_t heading;
+  uint32_t sAcc;
+  uint32_t cAcc;
+
+} uBloxNAVVELNEDPayload;
+
+
+typedef struct {
   uint8_t portID;		//Port Identifier Number (see Serial [- -]
   uint8_t reserved1;		//Reserved [- -]
   uint16_t txReady;		//TX ready PIN configuration [- -]
@@ -180,6 +198,24 @@ typedef struct {
   uint8_t lpMode;		//Low Power Mode 0: Max. performance mode 1: Power Save Mode (>= FW 6.00 only) 2-3: reserved 4: Eco mode 5-255: reserved [- -]
 } uBloxCFGRXMPayload;
 
+
+typedef struct {
+  uint32_t duration; //duration of requested task - set 0 =infinite
+  uint32_t flags;		//0x02 - backup
+} uBloxRXMPMREQ; //02 41
+
+typedef struct {
+  uint32_t version;
+  uint32_t flags; // |0x04 mandatory |0x0100 limit peak current
+  uint32_t updatePeriod;
+  uint32_t searchPeriod;
+  uint32_t gridOffset;
+  uint16_t onTime;
+  uint16_t minAcqTime;
+} uBloxCFGPM; //06 32
+
+
+
 typedef union {
   uBloxNAVPVTPayload navpvt;
   uBloxCFGPRTPayload cfgprt;
@@ -191,6 +227,9 @@ typedef union {
   uBloxACKACKayload ackack;
   uBloxCFGRSTPayload cfgrst;
   uBloxCFGRXMPayload cfgrxm;
+  uBloxNAVVELNEDPayload navvelned;
+  uBloxRXMPMREQ rxmpmreq;
+  uBloxCFGPM cfgpm;
 } ubloxPacketData;
 
 typedef struct __attribute__((packed)){
@@ -206,5 +245,9 @@ uBloxChecksum ublox_calc_checksum(const uint8_t msgClass, const uint8_t msgId, c
 void ublox_handle_incoming_byte(uint8_t data);
 void ublox_handle_packet(uBloxPacket *pkt);
 uint8_t ublox_wait_for_ack();
+void ublox_enable_pm();
+void ublox_sleep();
+void ublox_wakeup();
+void ublox_reset();
 
 #endif //RS41HUP_UBLOX_H

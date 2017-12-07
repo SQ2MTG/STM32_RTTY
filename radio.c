@@ -31,6 +31,10 @@ void radio_set_tx_frequency(const float freq_in_mhz) {
   radio_rw_register(0x77, (uint8_t) ((uint16_t)fc & 0xff), 1);
 }
 
+
+
+
+
 void radio_disable_tx() {
   radio_rw_register(0x07, 0x40, 1);
 }
@@ -42,6 +46,24 @@ void radio_soft_reset() {
 void radio_enable_tx() {
   radio_rw_register(0x07, 0x48, 1);
 }
+
+void radio_enable_direct_mode(){
+    radio_rw_register(0x72, 5, 1); //frequency deviation
+	GPIO_SetBits(GPIOC, radioNSELpin);
+	//Direct Mode using TX Data via SDI pin (only when nSEL is high)
+	//radio_rw_register(0x71, 0b00010011, 1);//modulation control GFSK
+	radio_rw_register(0x71, 0b00010010, 1);//modulation control FSK
+	spi_deinit();
+}
+void radio_disable_direct_mode(){
+	GPIO_ResetBits(GPIOC, radioNSELpin);
+	spi_init();
+	radio_rw_register(0x71, 0x00, 1);//unmodulated carrier
+    radio_rw_register(0x72, 0, 1); //frequency deviation
+}
+
+
+
 
 int8_t radio_read_temperature() {
   uint8_t temp;

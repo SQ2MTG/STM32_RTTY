@@ -25,11 +25,17 @@ uint8_t radio_rw_register(const uint8_t register_addr, uint8_t value, uint8_t wr
 
 void radio_set_tx_frequency(const float radio_set_tx_frequency);
 
+
+
 void radio_disable_tx();
 
 void radio_soft_reset();
 
 void radio_enable_tx();
+
+void radio_enable_direct_mode();
+
+void radio_disable_direct_mode();
 
 int8_t radio_read_temperature();
 

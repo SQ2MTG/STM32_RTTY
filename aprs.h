@@ -1,24 +1,59 @@
-//
-// Created by Admin on 2017-01-09.
-//
+/* trackuino copyright (C) 2010  EA5HAV Javi
+ * https://github.com/DL7AD/pecanpico9
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License
+ * as published by the Free Software Foundation; either version 2
+ * of the License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, write to the Free Software
+ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+ */
 
-#ifndef RS41HUP_APRS_H
-#define RS41HUP_APRS_H
+#ifndef __APRS_H__
+#define __APRS_H__
+#include <stm32f10x.h>
+#include "config.h"
+#include "ax25.h"
 
-#ifdef __cplusplus
-#include <stdint.h>
-#include <stdlib.h>
-#include "ublox.h"
+#define GSP_FIX_OLD						0x0
+#define GSP_FIX_CURRENT					0x1
 
-extern "C" {
+#define NMEA_SRC_OTHER					0x0
+#define NMEA_SRC_GLL					0x1
+#define NMEA_SRC_GGA					0x2
+#define NMEA_SRC_RMC					0x3
+
+#define ORIGIN_COMPRESSED				0x0
+#define ORIGIN_TNC_BTEXT				0x1
+#define ORIGIN_SOFTWARE					0x2
+#define ORIGIN_RESERVED					0x3
+#define ORIGIN_KPC3						0x4
+#define ORIGIN_PICO						0x5
+#define ORIGIN_OTHER_TRACKER			0x6
+#define ORIGIN_DIGIPEATER_CONVERSION	0x7
+
+//#define APRS_DEST_CALLSIGN				"APECAN" // APExxx = Pecan device
+//#define APRS_DEST_SSID					0
+
+#define SYM_BALLOON						0x2F4F
+#define SYM_SMALLAIRCRAFT				0x2F27
+#define SYM_SATELLITE					0x5C53
+#define SYM_CAR                         0x2F3E
+#define SYM_SHIP                        0x2F73
+
+void aprs_encode_position(ax25_t* packet);
+void aprs_encode_telemetry_configuration(ax25_t* packet, const aprs_conf_t *config, const telemetry_conf_t type);
+void aprs_encode_message(ax25_t* packet, const aprs_conf_t *config, const char *receiver, const char *text);
+
+void aprs_encode_init(ax25_t* packet, uint8_t* buffer, uint16_t size, mod_t mod);
+//void aprs_encode_data_packet(ax25_t* packet, char packetType, const aprs_conf_t *config, uint8_t *data, uint32_t size, trackPoint_t *trackPoint);
+uint32_t aprs_encode_finalize(ax25_t* packet);
+
 #endif
-  void aprs_init();
-  void aprs_timer_handler();
-  uint8_t aprs_is_active();
-  void aprs_send_position(GPSEntry gpsData, int8_t temperature, uint16_t voltage);
-  void aprs_change_tone_time(uint16_t x);
-  void aprs_test();
-#ifdef __cplusplus
-};
-#endif
-#endif //RS41HUP_APRS_H
+
